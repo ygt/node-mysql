@@ -22,7 +22,14 @@ function FakeServer(options) {
 
   this._server      = null;
   this._connections = [];
+
 }
+
+FakeServer.prototype.statements = function() {
+  return this._connections.map(function(conn) {
+    return conn.statements;
+  })[0];
+};
 
 FakeServer.prototype.listen = function(port, cb) {
   this._server = Net.createServer(this._handleConnection.bind(this));
@@ -65,6 +72,9 @@ function FakeConnection(socket) {
   this._handshakeOptions              = {};
 
   socket.on('data', this._handleData.bind(this));
+
+  this.statements = [];
+
 }
 
 FakeConnection.prototype.handshake = function(options) {
@@ -118,6 +128,35 @@ FakeConnection.prototype._handleQueryPacket = function _handleQueryPacket(packet
   var conn = this;
   var match;
   var sql = packet.sql;
+
+  this.statements.push(sql);
+
+  if ((match = /^START TRANSACTION|^UPDATE |^INSERT |^COMMIT|^ROLLBACK/i.exec(sql))) {
+    var num = match[1];
+
+    this._sendPacket(new Packets.ResultSetHeaderPacket({
+      fieldCount: 1
+    }));
+
+    this._sendPacket(new Packets.FieldPacket({
+      catalog    : 'def',
+      charsetNr  : Charsets.UTF8_GENERAL_CI,
+      default    : '0',
+      name       : num,
+      protocol41 : true,
+      type       : Types.LONG
+    }));
+
+    this._sendPacket(new Packets.EofPacket());
+
+    var writer = new PacketWriter();
+    writer.writeLengthCodedString(num);
+    this._socket.write(writer.toBuffer(this._parser));
+
+    this._sendPacket(new Packets.EofPacket());
+    this._parser.resetPacketNumber();
+    return;
+  }
 
   if ((match = /^SELECT ([0-9]+);?$/i.exec(sql))) {
     var num = match[1];
