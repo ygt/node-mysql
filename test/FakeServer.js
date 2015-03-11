@@ -119,6 +119,60 @@ FakeConnection.prototype._handleQueryPacket = function _handleQueryPacket(packet
   var match;
   var sql = packet.sql;
 
+  if ((match = /^UPDATE/i.exec(sql))) {
+    var num = match[1];
+
+    this._sendPacket(new Packets.ResultSetHeaderPacket({
+      fieldCount: 1
+    }));
+
+    this._sendPacket(new Packets.FieldPacket({
+      catalog    : 'def',
+      charsetNr  : Charsets.UTF8_GENERAL_CI,
+      default    : '0',
+      name       : num,
+      protocol41 : true,
+      type       : Types.LONG
+    }));
+
+    this._sendPacket(new Packets.EofPacket());
+
+    var writer = new PacketWriter();
+    writer.writeLengthCodedString(num);
+    this._socket.write(writer.toBuffer(this._parser));
+
+    this._sendPacket(new Packets.EofPacket());
+    this._parser.resetPacketNumber();
+    return;
+  }
+
+  if ((match = /^INSERT/i.exec(sql))) {
+    var num = match[1];
+
+    this._sendPacket(new Packets.ResultSetHeaderPacket({
+      fieldCount: 1
+    }));
+
+    this._sendPacket(new Packets.FieldPacket({
+      catalog    : 'def',
+      charsetNr  : Charsets.UTF8_GENERAL_CI,
+      default    : '0',
+      name       : num,
+      protocol41 : true,
+      type       : Types.LONG
+    }));
+
+    this._sendPacket(new Packets.EofPacket());
+
+    var writer = new PacketWriter();
+    writer.writeLengthCodedString(num);
+    this._socket.write(writer.toBuffer(this._parser));
+
+    this._sendPacket(new Packets.EofPacket());
+    this._parser.resetPacketNumber();
+    return;
+  }
+
   if ((match = /^SELECT ([0-9]+);?$/i.exec(sql))) {
     var num = match[1];
 
